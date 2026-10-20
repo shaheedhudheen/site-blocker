@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Site Blocker - popup preview</title>
+    <link rel="stylesheet" href="../extension/popup.css" />
+    <style>
+      body { width: 340px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <img src="../extension/icons/icon32.png" alt="" class="brand-icon" />
+        <h1>Site Blocker</h1>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="enabledToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <main>
+      <section class="current">
+        <div class="current-info">
+          <span class="current-domain">reddit.com</span>
+          <span class="current-state">Not blocked</span>
+        </div>
+        <button class="btn" type="button">Block this site</button>
+      </section>
+
+      <form class="add-row">
+        <input type="text" placeholder="example.com" />
+        <button type="submit" class="btn primary">Block</button>
+      </form>
+
+      <div class="duration-block">
+        <span class="duration-label">For</span>
+        <div class="duration-options">
+          <button type="button" class="chip active">Always</button>
+          <button type="button" class="chip">15 min</button>
+          <button type="button" class="chip">30 min</button>
+          <button type="button" class="chip">1 hour</button>
+          <button type="button" class="chip">2 hours</button>
+          <button type="button" class="chip">Custom</button>
+        </div>
+      </div>
+
+      <ul class="site-list">
+        <li>
+          <span class="site-name">news.ycombinator.com</span>
+          <button class="remove" type="button">&times;</button>
+        </li>
+        <li>
+          <span class="site-name">twitter.com</span>
+          <span class="badge timed">24:31</span>
+          <button class="remove" type="button">&times;</button>
+        </li>
+        <li>
+          <span class="site-name">youtube.com</span>
+          <button class="remove" type="button">&times;</button>
+        </li>
+      </ul>
+
+      <section class="focus-panel">
+        <div class="focus-head">
+          <h2>Focus mode</h2>
+          <span class="focus-status running">Focus &middot; 18:42</span>
+        </div>
+        <p class="focus-desc">
+          Block these sites for a work session, then let them through during the break.
+        </p>
+
+        <ul class="site-list focus-sites">
+          <li>
+            <span class="site-name">reddit.com</span>
+            <button class="remove" type="button">&times;</button>
+          </li>
+          <li>
+            <span class="site-name">twitter.com</span>
+            <button class="remove" type="button">&times;</button>
+          </li>
+        </ul>
+
+        <form class="add-row">
+          <input type="text" placeholder="site to focus on" />
+          <button type="submit" class="btn">Add</button>
+        </form>
+
+        <div class="focus-timings">
+          <label class="timing">
+            <span>Work</span>
+            <select>
+              <option>15 min</option>
+              <option selected>25 min</option>
+              <option>50 min</option>
+              <option>Custom</option>
+            </select>
+          </label>
+          <label class="timing">
+            <span>Break</span>
+            <select>
+              <option selected>5 min</option>
+              <option>10 min</option>
+              <option>15 min</option>
+              <option>Custom</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="focus-actions">
+          <button class="btn wide" type="button">Stop session</button>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>Blocking 4 sites</span></footer>
+  </body>
+</html>

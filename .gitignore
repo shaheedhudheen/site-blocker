@@ -1,0 +1,18 @@
+# Test harness artifacts (regenerated on every test run)
+tests/profile-*/
+tests/built/
+tests/chrome-*.log
+tests/report-raw.txt
+
+# Build output
+/dist/
+
+# Legacy icon output directory (see tests/make-icons.ps1)
+/icons/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~

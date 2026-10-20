@@ -1,0 +1,11 @@
+# Keep line endings consistent across platforms: LF in the repository and in
+# the working tree.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.ico binary
+*.jpg binary
+
+# Windows scripts keep CRLF.
+*.ps1 text eol=crlf

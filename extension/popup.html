@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Site Blocker</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <img src="icons/icon32.png" alt="" class="brand-icon" />
+        <h1>Site Blocker</h1>
+      </div>
+      <label class="switch" title="Turn blocking on or off">
+        <input type="checkbox" id="enabledToggle" />
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <main>
+      <p id="accessWarning" class="error" hidden>
+        Blocking can't work: this extension doesn't have access to sites. Open the browser's extension
+        settings and grant site access.
+      </p>
+
+      <section id="currentSite" class="current" hidden>
+        <div class="current-info">
+          <span id="currentDomain" class="current-domain"></span>
+          <span id="currentState" class="current-state"></span>
+        </div>
+        <button id="currentAction" class="btn" type="button"></button>
+      </section>
+
+      <form id="addForm" class="add-row" autocomplete="off">
+        <input
+          type="text"
+          id="domainInput"
+          placeholder="example.com"
+          spellcheck="false"
+          autocomplete="off"
+        />
+        <button type="submit" class="btn primary">Block</button>
+      </form>
+      <p id="error" class="error" hidden></p>
+
+      <div class="duration-block">
+        <span class="duration-label">For</span>
+        <div class="duration-options" id="durationOptions">
+          <button type="button" class="chip active" data-minutes="0">Always</button>
+          <button type="button" class="chip" data-minutes="15">15 min</button>
+          <button type="button" class="chip" data-minutes="30">30 min</button>
+          <button type="button" class="chip" data-minutes="60">1 hour</button>
+          <button type="button" class="chip" data-minutes="120">2 hours</button>
+          <button type="button" class="chip" data-minutes="custom">Custom</button>
+        </div>
+        <input type="number" id="customMinutes" class="custom-minutes" min="1" max="10080" hidden />
+      </div>
+
+      <ul id="siteList" class="site-list" hidden></ul>
+      <p id="emptyState" class="empty">No sites blocked yet.<br />Add one above to get started.</p>
+
+      <section class="focus-panel">
+        <div class="focus-head">
+          <h2>Focus mode</h2>
+          <span id="focusStatus" class="focus-status"></span>
+        </div>
+        <p class="focus-desc">
+          Block these sites for a work session, then let them through during the break. The work and
+          break lengths are locked while a session runs.
+        </p>
+
+        <ul id="focusSiteList" class="site-list focus-sites" hidden></ul>
+        <p id="focusEmptyState" class="empty small">No focus sites yet.</p>
+
+        <form id="focusAddForm" class="add-row" autocomplete="off">
+          <input
+            type="text"
+            id="focusDomainInput"
+            placeholder="site to focus on"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button type="submit" class="btn">Add</button>
+        </form>
+
+        <div class="focus-timings">
+          <label class="timing">
+            <span>Work</span>
+            <select id="workMinutes">
+              <option value="15">15 min</option>
+              <option value="25" selected>25 min</option>
+              <option value="50">50 min</option>
+              <option value="custom">Custom</option>
+            </select>
+            <input type="number" id="customWorkMinutes" class="custom-minutes" min="1" max="480" hidden />
+          </label>
+          <label class="timing">
+            <span>Break</span>
+            <select id="breakMinutes">
+              <option value="5" selected>5 min</option>
+              <option value="10">10 min</option>
+              <option value="15">15 min</option>
+              <option value="custom">Custom</option>
+            </select>
+            <input type="number" id="customBreakMinutes" class="custom-minutes" min="1" max="120" hidden />
+          </label>
+        </div>
+
+        <div class="focus-actions">
+          <button id="focusStartBtn" class="btn primary wide" type="button">Start focus session</button>
+          <button id="focusStopBtn" class="btn wide" type="button" hidden>Stop session</button>
+        </div>
+        <p id="focusError" class="error" hidden></p>
+      </section>
+    </main>
+
+    <footer>
+      <span id="statusText"></span>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

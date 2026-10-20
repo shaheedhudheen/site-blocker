@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Site blocked</title>
+    <link rel="stylesheet" href="blocked.css" />
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon" aria-hidden="true">
+        <svg width="72" height="72" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9.5" stroke="#e5484d" stroke-width="2" />
+          <line
+            x1="5.8"
+            y1="18.2"
+            x2="18.2"
+            y2="5.8"
+            stroke="#e5484d"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
+      <h1 id="title">Site blocked</h1>
+      <p class="site" id="siteName"></p>
+      <p class="countdown" id="countdown" hidden></p>
+      <p class="hint" id="hint">You added this site to Site Blocker, so it can't be opened.</p>
+      <div class="actions">
+        <button id="goBack" class="btn" type="button">Go back</button>
+        <button id="unblock" class="btn danger" type="button" hidden>Unblock and visit</button>
+      </div>
+    </div>
+    <script src="blocked.js"></script>
+  </body>
+</html>

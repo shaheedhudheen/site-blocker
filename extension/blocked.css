@@ -1,0 +1,102 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --text: #1f2328;
+  --text-dim: #6b7280;
+  --accent: #e5484d;
+  --accent-strong: #d13438;
+  --btn: #f0f1f3;
+  --btn-hover: #e6e8ea;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202124;
+    --text: #e8eaed;
+    --text-dim: #9aa0a6;
+    --btn: #35373b;
+    --btn-hover: #404348;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 15px/1.5 system-ui, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card {
+  max-width: 440px;
+  padding: 40px 32px;
+  text-align: center;
+}
+
+.icon {
+  line-height: 0;
+  margin-bottom: 8px;
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.site {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.countdown {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 6px;
+}
+
+.hint {
+  color: var(--text-dim);
+  margin: 0 0 28px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--btn);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.btn:hover {
+  background: var(--btn-hover);
+}
+.btn.danger {
+  background: var(--accent);
+  color: #fff;
+}
+.btn.danger:hover {
+  background: var(--accent-strong);
+}
