@@ -6,7 +6,7 @@
 // the top level), which is what the store expects. No dependencies: the zip
 // is written by hand, so the project stays free of node_modules.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
@@ -46,6 +46,18 @@ function dosStamp(date) {
   return { time, day };
 }
 
+// Every entry gets the same timestamp, so the same sources always produce
+// the same bytes and the same sha256. File mtimes are not used: a fresh
+// checkout or a rebase would change them and silently change the hash.
+//
+// Set SOURCE_DATE_EPOCH (a unix timestamp in seconds) to stamp the archive
+// with a date of your choosing instead.
+const STAMP = (() => {
+  const fromEnv = Number(process.env.SOURCE_DATE_EPOCH);
+  const seconds = Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 1577836800; // 2020-01-01
+  return dosStamp(new Date(seconds * 1000));
+})();
+
 // Collect every file under dir, relative to dir, in a stable order.
 function collect(dir, base = dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -68,7 +80,7 @@ function buildZip(files) {
     const useStore = deflated.length >= raw.length;
     const body = useStore ? raw : deflated;
     const method = useStore ? 0 : 8;
-    const { time, day } = dosStamp(statSync(file.full).mtime);
+    const { time, day } = STAMP;
     const name = Buffer.from(file.name, "utf8");
     const crc = crc32(raw);
 

@@ -72,6 +72,10 @@ zip is written by hand so the project needs no dependencies at all; a
 `sha256` file is written next to it. Rebuild whenever you change the
 version in `extension/manifest.json`.
 
+The archive is reproducible: the same sources always produce the same bytes
+and the same hash, so the published checksum keeps matching. Set
+`SOURCE_DATE_EPOCH` to stamp the archive with a date of your choosing.
+
 ## Store listing
 
 `store/` holds everything needed to publish the extension:
