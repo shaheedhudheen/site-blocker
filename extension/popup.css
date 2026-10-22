@@ -372,7 +372,8 @@ body.disabled .btn.primary {
   font-size: 12px;
 }
 .focus-timings {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 10px;
 }
@@ -383,6 +384,17 @@ body.disabled .btn.primary {
   gap: 4px;
   font-size: 12px;
   color: var(--text-dim);
+}
+/* The rounds control sits on its own row, so the select and the custom
+   number input can sit next to each other. */
+.timing.full {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.timing.full select {
+  flex: 1;
 }
 .timing select {
   font: inherit;

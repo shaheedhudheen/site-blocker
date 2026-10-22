@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
 // Preset choices offered in the focus panel.
 const WORK_PRESETS = ["15", "25", "50"];
 const BREAK_PRESETS = ["5", "10", "15"];
+const ROUND_PRESETS = ["1", "2", "3", "4", "5"];
 
 const els = {
   toggle: document.getElementById("enabledToggle"),
@@ -44,6 +45,8 @@ const els = {
   customWorkMinutes: document.getElementById("customWorkMinutes"),
   breakMinutes: document.getElementById("breakMinutes"),
   customBreakMinutes: document.getElementById("customBreakMinutes"),
+  focusRounds: document.getElementById("focusRounds"),
+  customRounds: document.getElementById("customRounds"),
   focusStartBtn: document.getElementById("focusStartBtn"),
   focusStopBtn: document.getElementById("focusStopBtn"),
   focusError: document.getElementById("focusError"),
@@ -60,6 +63,7 @@ let tickTimer = null; // live countdown while the popup is open
 // settings.focus so that re-rendering never clobbers it.
 let workChoice = { preset: "25", custom: 25 };
 let breakChoice = { preset: "5", custom: 5 };
+let roundsChoice = { preset: "0", custom: 3 }; // 0 rounds = keep going until stopped
 
 // ---------- helpers ----------
 
@@ -148,6 +152,19 @@ function chosenBreakMinutes() {
   }
   const value = Number(breakChoice.preset);
   return Number.isFinite(value) && value > 0 ? value : 5;
+}
+
+// How many work/break rounds the session should run. 0 means "keep going
+// until the user stops the session".
+function chosenRounds() {
+  if (roundsChoice.preset === "custom") {
+    const live = Number(els.customRounds.value);
+    if (Number.isFinite(live) && live > 0) return Math.min(99, Math.round(live));
+    const value = Number(roundsChoice.custom);
+    return Number.isFinite(value) && value > 0 ? Math.min(99, Math.round(value)) : 0;
+  }
+  const value = Number(roundsChoice.preset);
+  return Number.isFinite(value) && value >= 0 ? Math.min(99, Math.round(value)) : 0;
 }
 
 async function save(patch) {
@@ -351,6 +368,8 @@ function renderFocus() {
   els.breakMinutes.disabled = running;
   els.customWorkMinutes.disabled = running;
   els.customBreakMinutes.disabled = running;
+  els.focusRounds.disabled = running;
+  els.customRounds.disabled = running;
   els.workMinutes.classList.toggle("locked", running);
   els.breakMinutes.classList.toggle("locked", running);
 
@@ -537,6 +556,20 @@ els.customBreakMinutes.addEventListener("input", () => {
   breakChoice = { preset: "custom", custom: Number(els.customBreakMinutes.value) || 5 };
 });
 
+els.focusRounds.addEventListener("change", () => {
+  if (els.focusRounds.value === "custom") {
+    if (!els.customRounds.value) els.customRounds.value = 3;
+    roundsChoice = { preset: "custom", custom: Number(els.customRounds.value) || 3 };
+  } else {
+    roundsChoice = { preset: els.focusRounds.value, custom: roundsChoice.custom };
+  }
+  els.customRounds.hidden = els.focusRounds.value !== "custom";
+});
+
+els.customRounds.addEventListener("input", () => {
+  roundsChoice = { preset: "custom", custom: Number(els.customRounds.value) || 3 };
+});
+
 els.focusStartBtn.addEventListener("click", async () => {
   const focus = settings.focus;
   // A session is already running: never restart it. (The button is hidden
@@ -553,11 +586,13 @@ els.focusStartBtn.addEventListener("click", async () => {
   showFocusError("");
   const workMinutes = chosenWorkMinutes();
   const breakMinutes = chosenBreakMinutes();
+  const rounds = chosenRounds();
   await saveFocus({
     active: true,
     state: "working",
     workMinutes,
     breakMinutes,
+    rounds,
     endsAt: Date.now() + workMinutes * 60 * 1000,
     round: 0,
   });
@@ -608,6 +643,22 @@ els.focusStopBtn.addEventListener("click", async () => {
     els.breakMinutes.value = "custom";
     els.customBreakMinutes.value = focus.breakMinutes;
     els.customBreakMinutes.hidden = false;
+  }
+
+  const roundsValue = String(focus.rounds || 0);
+  if (ROUND_PRESETS.includes(roundsValue)) {
+    roundsChoice = { preset: roundsValue, custom: roundsChoice.custom };
+    els.focusRounds.value = roundsValue;
+    els.customRounds.hidden = true;
+  } else if (roundsValue === "0") {
+    roundsChoice = { preset: "0", custom: roundsChoice.custom };
+    els.focusRounds.value = "0";
+    els.customRounds.hidden = true;
+  } else {
+    roundsChoice = { preset: "custom", custom: Number(focus.rounds) || 3 };
+    els.focusRounds.value = "custom";
+    els.customRounds.value = focus.rounds;
+    els.customRounds.hidden = false;
   }
 
   try {

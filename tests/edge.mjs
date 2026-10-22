@@ -1,5 +1,6 @@
 // Edge cases around the focus-mode fixes:
 //   - the break phase is blocked again when the next work round starts
+//   - a session with a fixed number of rounds ends by itself
 //   - stopping a session releases the focus sites
 //   - a timed block and a focus site for the same domain behave sanely
 //   - the blocked page survives the extension's global off switch
@@ -305,6 +306,82 @@ try {
     "unblock label"
   );
   check("timed site offers to cancel the timer", /Cancel timer/.test(timedLabel), timedLabel);
+
+  // --- A session with a fixed number of rounds ends by itself. -------------
+  console.log("\n--- a fixed number of rounds ends the session ---");
+  await popup.evaluate(
+    `(() => {
+      const work = document.getElementById("workMinutes");
+      work.value = "custom";
+      work.dispatchEvent(new Event("change"));
+      const w = document.getElementById("customWorkMinutes");
+      w.value = "1";
+      w.dispatchEvent(new Event("input"));
+      const br = document.getElementById("breakMinutes");
+      br.value = "custom";
+      br.dispatchEvent(new Event("change"));
+      const b = document.getElementById("customBreakMinutes");
+      b.value = "1";
+      b.dispatchEvent(new Event("input"));
+      const r = document.getElementById("focusRounds");
+      r.value = "1";
+      r.dispatchEvent(new Event("change"));
+      document.getElementById("focusStartBtn").click();
+      return true;
+    })()`,
+    "start 1-round session"
+  );
+
+  const roundsStarted = await waitFor(async () => {
+    const v = await popup.evaluate(`(await chrome.storage.sync.get({focus:{}})).focus`, "focus");
+    return v && v.active && v.state === "working" && v.rounds === 1 ? v : null;
+  }, 10000).catch(() => null);
+  check("session started with 1 round", roundsStarted !== null, JSON.stringify(roundsStarted && roundsStarted.rounds));
+
+  const locked = await popup.evaluate(
+    `({
+      rounds: document.getElementById("focusRounds").disabled,
+      custom: document.getElementById("customRounds").disabled,
+    })`,
+    "rounds locked"
+  );
+  check(
+    "the rounds control is locked during a session",
+    locked.rounds === true && locked.custom === true,
+    JSON.stringify(locked)
+  );
+
+  const statusText = await popup.evaluate(`document.getElementById("focusStatus").textContent`, "status");
+  check("the popup shows the round counter", /round 1\/1/.test(statusText), statusText);
+
+  // Push the work phase into the break.
+  await popup.evaluate(
+    `await chrome.storage.sync.set({ focus: { ...(await chrome.storage.sync.get({focus:{}})).focus, endsAt: Date.now() - 1 } })`,
+    "fast forward work"
+  );
+  const roundsBreak = await waitFor(async () => {
+    const v = await popup.evaluate(`(await chrome.storage.sync.get({focus:{}})).focus`, "focus break");
+    return v && v.state === "break" ? v : null;
+  }, 15000).catch(() => null);
+  check("the session reached the break after the first round", roundsBreak !== null, JSON.stringify(roundsBreak && roundsBreak.state));
+
+  // Push the break over the end: the session must stop itself.
+  await popup.evaluate(
+    `await chrome.storage.sync.set({ focus: { ...(await chrome.storage.sync.get({focus:{}})).focus, endsAt: Date.now() - 1 } })`,
+    "fast forward break"
+  );
+  const roundsEnded = await waitFor(async () => {
+    const v = await popup.evaluate(`(await chrome.storage.sync.get({focus:{}})).focus`, "focus ended");
+    return v && !v.active ? v : null;
+  }, 15000).catch(() => null);
+  check("the session ended by itself after the last round", roundsEnded !== null, JSON.stringify(roundsEnded && roundsEnded.state));
+
+  const releasedAfterEnd = await waitFor(async () => {
+    const r = await popup.evaluate(`await chrome.declarativeNetRequest.getDynamicRules()`, "rules");
+    if (!Array.isArray(r)) return null;
+    return r.some((x) => x.condition.regexFilter.includes("round-test")) ? null : r;
+  }, 12000).catch(() => null);
+  check("the focus site is released when the session ends", Array.isArray(releasedAfterEnd), "rules cleared");
 } catch (e) {
   check("test run completed", false, e.message);
 } finally {
