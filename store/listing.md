@@ -91,6 +91,16 @@ PNG for the listing and the extension's own icon already matches.
 
 ## Privacy policy
 
-The policy text is in [privacy.md](privacy.md). The store needs it at a
-publicly reachable URL, so publish that file somewhere (GitHub Pages, for
-example) and paste the link into the dashboard.
+The policy text is in [privacy.md](privacy.md) and is published through
+GitHub Pages. Put this URL in the dashboard's privacy policy field:
+
+```
+https://shaheedhudheen.github.io/site-blocker/store/privacy.md
+```
+
+The same file is also served raw from the repository, which works as a
+fallback if Pages is ever turned off:
+
+```
+https://raw.githubusercontent.com/shaheedhudheen/site-blocker/main/store/privacy.md
+```

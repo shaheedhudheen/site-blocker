@@ -7,6 +7,8 @@ When you try to visit a blocked site, the page is replaced with a friendly
 "Site blocked" page. From there you can go back, or unblock the site if you
 really mean it.
 
+MIT licensed.
+
 ## Features
 
 - **Blocklist in the toolbar popup** – add any domain (e.g. `youtube.com`,
@@ -185,3 +187,19 @@ with the `TEST_BROWSER` environment variable if needed.
   session, the global switch, and timed blocks vs focus sites.
 - `node store/screenshots.mjs` - regenerates the store screenshots from
   the real extension.
+
+## Privacy
+
+The extension collects nothing. It has no servers, no accounts and no
+analytics, and it never reads the content of the pages you visit - blocking
+is done by the browser's own network engine. Everything it remembers is
+stored in `chrome.storage.sync`, which the browser may synchronize between
+your own devices.
+
+The full policy is in [`store/privacy.md`](store/privacy.md), published at
+<https://shaheedhudheen.github.io/site-blocker/store/privacy.md>.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
