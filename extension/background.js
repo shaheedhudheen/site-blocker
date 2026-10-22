@@ -167,9 +167,44 @@ function buildRule(site, id, entry) {
 // alarms) can never interleave their remove/add operations.
 let syncChain = Promise.resolve();
 
+// The last error from installing the rules, and how many rules are actually
+// in place. The popup shows this, so a user whose blocking silently does
+// nothing can find out why instead of guessing.
+let lastRuleError = null;
+
 function syncRules() {
   syncChain = syncChain.then(doSyncRules, doSyncRules);
   return syncChain;
+}
+
+// How many rules should be in place right now.
+function expectedRuleCount(settings, now) {
+  if (!settings.enabled) return 0;
+  return blockedEntries(settings, now).size;
+}
+
+// Report the real state of the blocking rules back to the popup.
+async function reportRuleStatus(settings, now) {
+  const status = {
+    ok: lastRuleError === null,
+    expected: expectedRuleCount(settings, now),
+    installed: 0,
+    error: lastRuleError,
+    at: Date.now(),
+  };
+  try {
+    const rules = await chrome.declarativeNetRequest.getDynamicRules();
+    status.installed = Array.isArray(rules) ? rules.length : 0;
+  } catch (error) {
+    status.ok = false;
+    status.error = lastRuleError || String(error && error.message ? error.message : error);
+  }
+  try {
+    await chrome.storage.local.set({ ruleStatus: status });
+  } catch {
+    // not fatal
+  }
+  return status;
 }
 
 async function doSyncRules() {
@@ -259,10 +294,13 @@ async function doSyncRules() {
       removeRuleIds: existing.map((rule) => rule.id),
       addRules,
     });
+    lastRuleError = null;
   } catch (error) {
+    lastRuleError = String(error && error.message ? error.message : error);
     console.error("[Site Blocker] failed to update blocking rules:", error);
   }
 
+  await reportRuleStatus(settings, now);
   await reconcileTabs(entries);
   await scheduleAlarms(settings, now);
 }
@@ -373,6 +411,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       () => sendResponse({ ok: false })
     );
     return true; // keep the message channel open for the async response
+  }
+
+  // Asked by the popup: are the blocking rules actually in place?
+  if (message.type === "getRuleStatus") {
+    (async () => {
+      // Wait for any sync already in flight, otherwise the rules could still
+      // be on their way in and the popup would report a false problem. Do not
+      // start a new sync here: the popup asks every few seconds, and rebuilding
+      // every rule each time would be wasteful.
+      try {
+        await syncChain;
+      } catch {
+        // A failed sync is reported through lastRuleError below.
+      }
+      const raw = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+      const settings = normalizeSettings(raw);
+      const status = await reportRuleStatus(settings, Date.now());
+      sendResponse(status);
+    })();
+    return true;
   }
 
   // Asked by the blocked page: is this site still blocked right now?

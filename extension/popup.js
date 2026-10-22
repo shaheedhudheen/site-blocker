@@ -24,6 +24,7 @@ const ROUND_PRESETS = ["1", "2", "3", "4", "5"];
 const els = {
   toggle: document.getElementById("enabledToggle"),
   accessWarning: document.getElementById("accessWarning"),
+  ruleWarning: document.getElementById("ruleWarning"),
   current: document.getElementById("currentSite"),
   currentDomain: document.getElementById("currentDomain"),
   currentState: document.getElementById("currentState"),
@@ -173,7 +174,8 @@ async function save(patch) {
   await chrome.storage.sync.set(patch);
   // Don't block the UI on the service worker: storage.onChanged also triggers
   // a rule sync, so this is just a nudge to apply changes right away.
-  syncNow();
+  // Once it is done, re-check that the rules really landed.
+  syncNow().then(checkRuleStatus, checkRuleStatus);
 }
 
 // Save part of the focus settings without clobbering the parts the service
@@ -210,6 +212,43 @@ async function syncNow() {
   } catch {
     // Service worker not reachable; it will sync from storage.onChanged.
   }
+}
+
+// Check that the blocking rules really are in place, and warn the user when
+// they are not. Without this, a browser that refuses the rules leaves
+// blocking silently broken.
+async function checkRuleStatus() {
+  let status = null;
+  try {
+    status = await chrome.runtime.sendMessage({ type: "getRuleStatus" });
+  } catch {
+    // The service worker is not reachable right now. Say so instead of
+    // pretending everything is fine.
+    els.ruleWarning.textContent =
+      "Blocking isn't running: the extension's background service is not responding. Reload the extension from the browser's extension page.";
+    els.ruleWarning.hidden = false;
+    return;
+  }
+  if (!status) return;
+
+  let message = "";
+  if (status.error) {
+    message =
+      "Blocking isn't working: the browser refused the blocking rules (" +
+      status.error +
+      ").";
+  } else if (status.expected > 0 && status.installed === 0) {
+    message = "Blocking isn't working: no blocking rules are installed.";
+  } else if (status.expected > status.installed) {
+    message =
+      "Blocking is only partly working: " +
+      status.installed +
+      " of " +
+      status.expected +
+      " sites have a rule installed.";
+  }
+  els.ruleWarning.textContent = message;
+  els.ruleWarning.hidden = !message;
 }
 
 // ---------- rendering ----------
@@ -416,12 +455,15 @@ function render() {
 }
 
 // Keep the countdowns ticking while the popup stays open.
+let statusTick = 0;
 function startTicking() {
   if (tickTimer) return;
   tickTimer = setInterval(() => {
     const focus = settings.focus;
     if (focus.active) renderFocusStatus();
     if (settings.timedBlocks && Object.keys(settings.timedBlocks).length) renderList();
+    // Re-check the rules now and then, not every second.
+    if (++statusTick % 5 === 0) checkRuleStatus();
   }, 1000);
 }
 
@@ -676,6 +718,10 @@ els.focusStopBtn.addEventListener("click", async () => {
   }
 
   render();
+  // Opening the popup rebuilds the rules once, which repairs them if they
+  // somehow went missing, then reports their real state.
+  await syncNow();
+  await checkRuleStatus();
   els.input.focus();
   startTicking();
 })();

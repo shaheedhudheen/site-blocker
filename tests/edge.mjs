@@ -382,6 +382,58 @@ try {
     return r.some((x) => x.condition.regexFilter.includes("round-test")) ? null : r;
   }, 12000).catch(() => null);
   check("the focus site is released when the session ends", Array.isArray(releasedAfterEnd), "rules cleared");
+
+  // --- The popup warns when blocking is not actually working. --------------
+  console.log("\n--- rule health warning ---");
+  const healthy = await popup.evaluate(
+    `(async () => {
+      const status = await chrome.runtime.sendMessage({ type: "getRuleStatus" });
+      return {
+        status,
+        hidden: document.getElementById("ruleWarning").hidden,
+        text: document.getElementById("ruleWarning").textContent,
+      };
+    })()`,
+    "rule status"
+  );
+  check(
+    "the reported rule count matches what should be installed",
+    healthy.status.ok === true && healthy.status.installed === healthy.status.expected,
+    JSON.stringify(healthy.status)
+  );
+  check("no warning while blocking works", healthy.hidden === true, healthy.text);
+
+  // Remove the rules behind the extension's back, the way a broken browser
+  // profile would, and check that the popup notices within a few seconds.
+  await popup.evaluate(
+    `await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: (await chrome.declarativeNetRequest.getDynamicRules()).map((r) => r.id),
+    })`,
+    "remove rules"
+  );
+  const warned = await waitFor(async () => {
+    const v = await popup.evaluate(
+      `({
+        hidden: document.getElementById("ruleWarning").hidden,
+        text: document.getElementById("ruleWarning").textContent,
+      })`,
+      "warning"
+    );
+    return v && v.hidden === false ? v : null;
+  }, 15000).catch(() => null);
+  check(
+    "a warning appears when the blocking rules are missing",
+    warned !== null && /isn't working|no blocking rules/i.test(warned.text),
+    warned ? warned.text : "no warning"
+  );
+
+  // Syncing again repairs them.
+  await popup.evaluate(`await chrome.runtime.sendMessage({ type: "syncNow" })`, "resync");
+  const repaired = await waitFor(async () => {
+    const r = await popup.evaluate(`await chrome.declarativeNetRequest.getDynamicRules()`, "rules");
+    return Array.isArray(r) && r.length ? r : null;
+  }, 12000).catch(() => null);
+  check("syncing rebuilds missing rules", Array.isArray(repaired), "rules restored");
 } catch (e) {
   check("test run completed", false, e.message);
 } finally {

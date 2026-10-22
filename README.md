@@ -161,9 +161,20 @@ the site you are currently on.
 - Redirect rules need host access, which is why the extension asks for access
   to all sites. If that access is revoked in the browser's extension settings,
   blocking silently stops working - the popup shows a warning in that case.
+- The popup also checks that the rules really are installed, and warns if the
+  browser refused them or they went missing. Opening the popup rebuilds them.
+  This is what to check first if a site is not being blocked.
 - `popup.html` / `popup.js` manage the list in `chrome.storage.sync`.
 - `blocked.html` reads the blocked site from the redirect URL and offers to
   unblock it.
+
+### Redirects between domains
+
+A rule matches the URL that is actually being loaded, so a site that
+redirects to another domain is blocked by whichever entry matches the
+redirect target. For example `twitter.com` redirects to `x.com`: blocking
+`x.com` also blocks `twitter.com`, but blocking only `twitter.com` does
+*not* block `x.com`.
 
 ## Tests
 
@@ -188,7 +199,8 @@ with the `TEST_BROWSER` environment variable if needed.
   already-open tabs being blocked.
 - `node tests/edge.mjs` - edge cases: the next work round re-blocking,
   a session with a fixed number of rounds ending on its own, stopping a
-  session, the global switch, and timed blocks vs focus sites.
+  session, the global switch, timed blocks vs focus sites, and the popup's
+  warning when the blocking rules go missing.
 - `node store/screenshots.mjs` - regenerates the store screenshots from
   the real extension.
 

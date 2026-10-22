@@ -8,6 +8,7 @@ export async function cdpConnect(wsUrl) {
   });
   let nextId = 1;
   const pending = new Map();
+  const listeners = new Map();
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.id && pending.has(msg.id)) {
@@ -15,6 +16,10 @@ export async function cdpConnect(wsUrl) {
       pending.delete(msg.id);
       if (msg.error) reject(new Error(msg.error.message));
       else resolve(msg.result);
+    } else if (msg.method) {
+      // An event, e.g. "Runtime.consoleAPICalled".
+      const handlers = listeners.get(msg.method);
+      if (handlers) for (const handler of handlers) handler(msg.params, msg.sessionId);
     }
   };
   const send = (method, params = {}, sessionId) =>
@@ -23,7 +28,17 @@ export async function cdpConnect(wsUrl) {
       pending.set(id, { resolve, reject });
       ws.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }));
     });
-  return { send, close: () => ws.close() };
+  // Subscribe to an event. Returns a function that unsubscribes.
+  const on = (method, handler) => {
+    if (!listeners.has(method)) listeners.set(method, []);
+    listeners.get(method).push(handler);
+    return () => {
+      const handlers = listeners.get(method) || [];
+      const index = handlers.indexOf(handler);
+      if (index >= 0) handlers.splice(index, 1);
+    };
+  };
+  return { send, on, close: () => ws.close() };
 }
 
 export async function evalInTarget(client, sessionId, expression, awaitPromise = true) {
