@@ -16,7 +16,9 @@ really mean it.
   the timer runs out.
 - **Focus mode (pomodoro)** – pick a set of sites, choose a work length and a
   break length, and start a session. Your focus sites are blocked during the
-  work phase and let through during the break, then the cycle repeats.
+  work phase and let through during the break, then the cycle repeats. Set a
+  number of rounds to let the session end on its own, or leave it running
+  until you stop it.
 - **Global on/off switch** – pause blocking without losing your list.
 - **Block the current site in one click** – a shortcut when you're on a page
   you want gone.
@@ -34,6 +36,9 @@ really mean it.
 ```
 extension/   the unpacked extension (load this folder)
 tests/       development test harness (not part of the extension)
+store/       Chrome Web Store listing, privacy policy and screenshots
+build.mjs    packages extension/ into a store-ready zip
+dist/        build output (not tracked by git)
 README.md
 ```
 
@@ -53,6 +58,32 @@ extension.
 4. Pin the extension from the puzzle-piece menu so you can see it in the
    toolbar.
 
+## Build
+
+```
+node build.mjs
+```
+
+Packages `extension/` into `dist/site-blocker-<version>.zip` with
+`manifest.json` at the root, which is what the Chrome Web Store expects. The
+zip is written by hand so the project needs no dependencies at all; a
+`sha256` file is written next to it. Rebuild whenever you change the
+version in `extension/manifest.json`.
+
+## Store listing
+
+`store/` holds everything needed to publish the extension:
+
+- `store/listing.md` – the name, descriptions, category, permission
+  justifications and screenshot notes for the Web Store dashboard.
+- `store/privacy.md` – the privacy policy, which the store needs at a
+  publicly reachable URL.
+- `store/screenshots.mjs` – regenerates the screenshots from the real
+  extension (`node store/screenshots.mjs`).
+
+The screenshots are captured from the extension running in a browser, not
+mocked up, so they always show the current UI.
+
 ## Usage
 
 - Click the toolbar icon to open the popup.
@@ -65,7 +96,9 @@ extension.
   1. Add the sites you want to avoid during work.
   2. Choose a work length (15/25/50 min or custom) and a break length
      (5/10/15 min or custom).
-  3. Press **Start focus session**. Those sites are blocked while you work
+  3. Optionally set a number of rounds, so the session ends by itself
+     after that many work/break cycles.
+  4. Press **Start focus session**. Those sites are blocked while you work
      and open freely during the break.
   Press **Stop session** to end it early.
 - Use the **toggle** in the popup header to pause/resume blocking.
@@ -78,8 +111,13 @@ extension.
 ### Focus mode details
 
 - A focus session runs one work phase, then one break phase, then repeats.
+- The **Rounds** setting decides how long the session runs. *Until stopped*
+  (the default) repeats forever until you stop it; a number of rounds makes
+  the session end by itself after that many work/break cycles. The break
+  after the last round still happens.
 - The work and break lengths are **locked while a session is running** – stop
-  the session first if you want to change them.
+  the session first if you want to change them. The round count is locked
+  as well.
 - Your focus sites are blocked during the work phase and open freely during
   the break. When the break starts, the blocked page sends you straight to
   the site on its own – no manual refresh needed.
@@ -143,4 +181,7 @@ with the `TEST_BROWSER` environment variable if needed.
   timer, automatic release at the break, focus sites always blocking, and
   already-open tabs being blocked.
 - `node tests/edge.mjs` - edge cases: the next work round re-blocking,
-  stopping a session, the global switch, and timed blocks vs focus sites.
+  a session with a fixed number of rounds ending on its own, stopping a
+  session, the global switch, and timed blocks vs focus sites.
+- `node store/screenshots.mjs` - regenerates the store screenshots from
+  the real extension.
