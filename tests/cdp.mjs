@@ -75,3 +75,23 @@ export async function waitFor(fn, timeoutMs = 20000, intervalMs = 300) {
 export function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
+
+// Load the unpacked extension and return its id.
+//
+// Branded Chrome and Edge no longer accept --load-extension (Chrome 137+), so
+// the extension is loaded through DevTools instead; the browser has to be
+// started with --enable-unsafe-extension-debugging for that. Older browsers
+// do not have the Extensions domain, but they still honour the command-line
+// switch, so fall back to finding the extension's service worker target.
+export async function loadExtension(client, dir) {
+  try {
+    const { id } = await client.send("Extensions.loadUnpacked", { path: dir });
+    return id;
+  } catch {
+    const sw = await waitFor(async () => {
+      const { targetInfos } = await client.send("Target.getTargets");
+      return targetInfos.find((t) => t.type === "service_worker" && t.url.endsWith("/background.js"));
+    }, 30000);
+    return new URL(sw.url).host;
+  }
+}

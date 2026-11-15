@@ -18,10 +18,10 @@
     </header>
 
     <main>
-      <p id="accessWarning" class="error" hidden>
-        Blocking can't work: this extension doesn't have access to sites. Open the browser's extension
-        settings and grant site access.
-      </p>
+      <div id="accessWarning" class="error warning" hidden>
+        <span>Blocking can't work: this extension doesn't have access to sites.</span>
+        <button id="grantAccess" class="link-btn" type="button">Grant access</button>
+      </div>
       <p id="ruleWarning" class="error" hidden></p>
 
       <section id="currentSite" class="current" hidden>

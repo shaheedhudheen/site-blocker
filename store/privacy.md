@@ -1,6 +1,6 @@
 # Privacy Policy for Site Blocker
 
-**Last updated: 22 October 2026**
+**Last updated: 15 November 2026**
 
 ## Summary
 
@@ -11,7 +11,7 @@ remembers lives in your own browser, on your own device.
 ## What the extension stores
 
 The extension stores the following, and nothing else, in your browser's
-sync storage (`chrome.storage.sync`):
+sync storage:
 
 - the list of domains you chose to block
 - the expiry time of each timed block
@@ -48,7 +48,9 @@ anywhere.
 
 The extension can be granted narrower access by the browser. If site
 access is revoked, blocking stops working and the popup shows a warning
-explaining why.
+explaining why. Firefox does not grant site access at install time at all;
+there the extension asks for it from a page of its own, and blocking stays
+off until it is allowed.
 
 ## Children
 

@@ -1,21 +1,26 @@
-// Site Blocker service worker.
+// Site Blocker background script.
 //
-// Keeps declarativeNetRequest dynamic rules in sync with the blocked list
-// stored in chrome.storage.sync. Three kinds of blocked site are supported:
+// Runs as a service worker in Chrome and as an event page in Firefox. It keeps
+// declarativeNetRequest dynamic rules in sync with the blocked list stored in
+// extension storage. Three kinds of blocked site are supported:
 //
 //   - permanent blocks  (blockedSites: string[])
 //   - timed blocks      (timedBlocks: { domain: expiry timestamp })
 //   - focus sessions    (focus: pomodoro style timer - its sites are blocked
 //                        while the focus phase runs and released on breaks)
 //
-// Timers are driven by chrome.alarms so they keep working after the service
-// worker is shut down (which happens after ~30s of inactivity) and after the
-// browser is restarted.
+// Timers are driven by alarms so they keep working after the background script
+// is shut down (which happens after ~30s of inactivity) and after the browser
+// is restarted.
 //
 // Blocking rules only intercept *navigations*, so a page that was already
 // open when a site got blocked would keep working. To make blocking actually
 // stick, open tabs are reconciled after every change: a tab sitting on a
 // newly blocked site is reloaded so it hits the blocked page.
+
+// Firefox exposes a promise-based "browser" namespace. Chrome only has
+// "chrome", but its Manifest V3 methods return promises too.
+const api = globalThis.browser ?? globalThis.chrome;
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -154,7 +159,7 @@ function buildRule(site, id, entry) {
     priority: 1,
     action: {
       type: "redirect",
-      redirect: { regexSubstitution: chrome.runtime.getURL("blocked.html") + query + "\\0" },
+      redirect: { regexSubstitution: api.runtime.getURL("blocked.html") + query + "\\0" },
     },
     condition: {
       regexFilter: "^https?://([^/?#]*\\.)?" + domain + "(?::[0-9]+)?(?:[/?#].*)?$",
@@ -193,14 +198,14 @@ async function reportRuleStatus(settings, now) {
     at: Date.now(),
   };
   try {
-    const rules = await chrome.declarativeNetRequest.getDynamicRules();
+    const rules = await api.declarativeNetRequest.getDynamicRules();
     status.installed = Array.isArray(rules) ? rules.length : 0;
   } catch (error) {
     status.ok = false;
     status.error = lastRuleError || String(error && error.message ? error.message : error);
   }
   try {
-    await chrome.storage.local.set({ ruleStatus: status });
+    await api.storage.local.set({ ruleStatus: status });
   } catch {
     // not fatal
   }
@@ -210,7 +215,7 @@ async function reportRuleStatus(settings, now) {
 async function doSyncRules() {
   let raw;
   try {
-    raw = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+    raw = await api.storage.sync.get(DEFAULT_SETTINGS);
   } catch (error) {
     console.error("[Site Blocker] could not read settings:", error);
     return;
@@ -232,7 +237,7 @@ async function doSyncRules() {
     // changed by the user while we were working. Merging with the latest
     // stored value keeps sites/durations the user edited in the meantime.
     try {
-      const latestRaw = await chrome.storage.sync.get({ focus: DEFAULT_SETTINGS.focus });
+      const latestRaw = await api.storage.sync.get({ focus: DEFAULT_SETTINGS.focus });
       const latest = normalizeSettings({ focus: latestRaw.focus }).focus;
       const untouched =
         latest.active === (raw.focus && raw.focus.active) &&
@@ -245,7 +250,7 @@ async function doSyncRules() {
           endsAt: advanced.endsAt,
           round: advanced.round,
         };
-        await chrome.storage.sync.set({ focus: merged });
+        await api.storage.sync.set({ focus: merged });
         settings.focus = merged;
       } else {
         // The user changed the session meanwhile - use their version.
@@ -258,7 +263,7 @@ async function doSyncRules() {
   // Forget timed blocks that have expired, without touching blocks the user
   // added in the meantime.
   try {
-    const latest = (await chrome.storage.sync.get({ timedBlocks: {} })).timedBlocks || {};
+    const latest = (await api.storage.sync.get({ timedBlocks: {} })).timedBlocks || {};
     const next = { ...latest };
     let removed = false;
     for (const [site, expiry] of Object.entries(next)) {
@@ -267,7 +272,7 @@ async function doSyncRules() {
         removed = true;
       }
     }
-    if (removed) await chrome.storage.sync.set({ timedBlocks: next });
+    if (removed) await api.storage.sync.set({ timedBlocks: next });
     settings.timedBlocks = next;
   } catch (error) {
     console.error("[Site Blocker] could not clean up timed blocks:", error);
@@ -284,13 +289,13 @@ async function doSyncRules() {
 
   let existing = [];
   try {
-    existing = await chrome.declarativeNetRequest.getDynamicRules();
+    existing = await api.declarativeNetRequest.getDynamicRules();
   } catch {
     // fall through - updateDynamicRules below will surface the real problem
   }
 
   try {
-    await chrome.declarativeNetRequest.updateDynamicRules({
+    await api.declarativeNetRequest.updateDynamicRules({
       removeRuleIds: existing.map((rule) => rule.id),
       addRules,
     });
@@ -310,7 +315,7 @@ async function doSyncRules() {
 async function reconcileTabs(entries) {
   let previous = [];
   try {
-    previous = (await chrome.storage.local.get({ lastBlocked: [] })).lastBlocked || [];
+    previous = (await api.storage.local.get({ lastBlocked: [] })).lastBlocked || [];
   } catch {
     previous = [];
   }
@@ -319,7 +324,7 @@ async function reconcileTabs(entries) {
   const newlyBlocked = current.filter((site) => !previous.includes(site));
 
   try {
-    await chrome.storage.local.set({ lastBlocked: current });
+    await api.storage.local.set({ lastBlocked: current });
   } catch {
     // not fatal
   }
@@ -328,7 +333,7 @@ async function reconcileTabs(entries) {
 
   let tabs = [];
   try {
-    tabs = await chrome.tabs.query({});
+    tabs = await api.tabs.query({});
   } catch (error) {
     console.error("[Site Blocker] could not list tabs:", error);
     return;
@@ -336,8 +341,10 @@ async function reconcileTabs(entries) {
 
   for (const tab of tabs) {
     if (typeof tab.id !== "number" || !tab.url) continue;
-    // Our own blocked page navigates itself when the block lifts.
-    if (tab.url.startsWith("chrome-extension://")) continue;
+    // Our own blocked page navigates itself when the block lifts. Compare
+    // against the extension's own origin, which differs between browsers
+    // (chrome-extension:// vs moz-extension://).
+    if (tab.url.startsWith(api.runtime.getURL(""))) continue;
 
     let host;
     try {
@@ -352,7 +359,7 @@ async function reconcileTabs(entries) {
     if (!newlyBlocked.some((site) => host === site || host.endsWith("." + site))) continue;
 
     try {
-      await chrome.tabs.reload(tab.id);
+      await api.tabs.reload(tab.id);
     } catch (error) {
       // The tab may have been closed already; that is fine.
     }
@@ -371,38 +378,38 @@ async function scheduleAlarms(settings, now) {
   }
 
   try {
-    await chrome.alarms.clear(ALARM_NEXT);
-    await chrome.alarms.clear(ALARM_TICK);
+    await api.alarms.clear(ALARM_NEXT);
+    await api.alarms.clear(ALARM_TICK);
     if (pending.length) {
-      await chrome.alarms.create(ALARM_NEXT, { when: Math.min(...pending) });
-      await chrome.alarms.create(ALARM_TICK, { periodInMinutes: 1 });
+      await api.alarms.create(ALARM_NEXT, { when: Math.min(...pending) });
+      await api.alarms.create(ALARM_TICK, { periodInMinutes: 1 });
     }
   } catch (error) {
     console.error("[Site Blocker] could not schedule timers:", error);
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+api.runtime.onInstalled.addListener(() => {
   syncRules();
 });
 
-chrome.runtime.onStartup.addListener(() => {
+api.runtime.onStartup.addListener(() => {
   syncRules();
 });
 
-chrome.storage.onChanged.addListener((changes, area) => {
+api.storage.onChanged.addListener((changes, area) => {
   if (area === "sync" && (changes.blockedSites || changes.enabled || changes.timedBlocks || changes.focus)) {
     syncRules();
   }
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+api.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NEXT || alarm.name === ALARM_TICK) {
     syncRules();
   }
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message) return false;
 
   if (message.type === "syncNow") {
@@ -425,7 +432,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch {
         // A failed sync is reported through lastRuleError below.
       }
-      const raw = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+      const raw = await api.storage.sync.get(DEFAULT_SETTINGS);
       const settings = normalizeSettings(raw);
       const status = await reportRuleStatus(settings, Date.now());
       sendResponse(status);
@@ -436,7 +443,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Asked by the blocked page: is this site still blocked right now?
   if (message.type === "getBlockState") {
     (async () => {
-      const raw = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+      const raw = await api.storage.sync.get(DEFAULT_SETTINGS);
       const settings = normalizeSettings(raw);
       const entries = blockedEntries(settings, Date.now());
       const entry = hostIsBlocked(message.host, entries);
@@ -453,5 +460,5 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-// Also self-heal whenever the service worker wakes up.
+// Also self-heal whenever the background script wakes up.
 syncRules();

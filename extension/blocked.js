@@ -5,9 +5,14 @@
 // value can be substituted raw (so URLSearchParams would cut it off at the
 // first "&") or percent-encoded, so handle both.
 //
-// The page also watches the service worker: when a timer runs out or a focus
-// session moves into its break, the site becomes reachable again and this
-// page sends the user straight there instead of making them reload manually.
+// The page also watches the background script: when a timer runs out or a
+// focus session moves into its break, the site becomes reachable again and
+// this page sends the user straight there instead of making them reload
+// manually.
+
+// Firefox exposes a promise-based "browser" namespace. Chrome only has
+// "chrome", but its Manifest V3 methods return promises too.
+const api = globalThis.browser ?? globalThis.chrome;
 
 const search = location.search;
 
@@ -72,7 +77,7 @@ const hintEl = document.getElementById("hint");
 const unblockBtn = document.getElementById("unblock");
 const goBackBtn = document.getElementById("goBack");
 
-// Live state, refreshed from the service worker.
+// Live state, refreshed from the background script.
 let mode = initialMode;
 let until = initialUntil;
 let released = false;
@@ -130,16 +135,16 @@ function updateCountdown() {
     (mode === "focus" ? "Unlocks in " : "Unblocks in ") + formatDuration(remaining);
 }
 
-// Ask the service worker whether the site is still blocked. When the answer
+// Ask the background script whether the site is still blocked. When the answer
 // is no the block is over (timer ran out, focus break started, site removed)
 // and we send the user to the site they wanted.
 async function checkState() {
   if (released || !domain) return;
   let state = null;
   try {
-    state = await chrome.runtime.sendMessage({ type: "getBlockState", host: domain });
+    state = await api.runtime.sendMessage({ type: "getBlockState", host: domain });
   } catch {
-    return; // service worker unavailable; try again on the next tick
+    return; // background script unavailable; try again on the next tick
   }
   if (!state) return;
 
@@ -177,7 +182,7 @@ function startWatching() {
 startWatching();
 
 unblockBtn.addEventListener("click", async () => {
-  const { blockedSites = [], timedBlocks = {} } = await chrome.storage.sync.get({
+  const { blockedSites = [], timedBlocks = {} } = await api.storage.sync.get({
     blockedSites: [],
     timedBlocks: {},
   });
@@ -186,17 +191,17 @@ unblockBtn.addEventListener("click", async () => {
   const timedMatch = Object.keys(timedBlocks).find((s) => host === s || host.endsWith("." + s));
 
   if (match) {
-    await chrome.storage.sync.set({ blockedSites: blockedSites.filter((s) => s !== match) });
+    await api.storage.sync.set({ blockedSites: blockedSites.filter((s) => s !== match) });
   } else if (timedMatch) {
     const next = { ...timedBlocks };
     delete next[timedMatch];
-    await chrome.storage.sync.set({ timedBlocks: next });
+    await api.storage.sync.set({ timedBlocks: next });
   }
 
   // Rebuild rules immediately and wait for them to be applied, otherwise the
   // navigation below can be caught by the rule we are trying to remove.
   try {
-    await chrome.runtime.sendMessage({ type: "syncNow" });
+    await api.runtime.sendMessage({ type: "syncNow" });
   } catch {
     // storage.onChanged also triggers a sync; retry the navigation anyway
   }
@@ -217,9 +222,9 @@ goBackBtn.addEventListener("click", async () => {
   }
   // Nothing to go back to: close the tab we opened the blocked site in.
   try {
-    const tab = await chrome.tabs.getCurrent();
+    const tab = await api.tabs.getCurrent();
     if (tab) {
-      await chrome.tabs.remove(tab.id);
+      await api.tabs.remove(tab.id);
       return;
     }
   } catch {

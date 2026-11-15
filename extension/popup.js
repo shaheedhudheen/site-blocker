@@ -1,5 +1,9 @@
 // Popup logic: manage the blocked site list, timed blocks and focus sessions.
 
+// Firefox exposes a promise-based "browser" namespace. Chrome only has
+// "chrome", but its Manifest V3 methods return promises too.
+const api = globalThis.browser ?? globalThis.chrome;
+
 const DEFAULT_SETTINGS = {
   enabled: true,
   blockedSites: [],
@@ -24,6 +28,7 @@ const ROUND_PRESETS = ["1", "2", "3", "4", "5"];
 const els = {
   toggle: document.getElementById("enabledToggle"),
   accessWarning: document.getElementById("accessWarning"),
+  grantAccess: document.getElementById("grantAccess"),
   ruleWarning: document.getElementById("ruleWarning"),
   current: document.getElementById("currentSite"),
   currentDomain: document.getElementById("currentDomain"),
@@ -171,8 +176,8 @@ function chosenRounds() {
 async function save(patch) {
   localRevision++;
   settings = { ...settings, ...patch };
-  await chrome.storage.sync.set(patch);
-  // Don't block the UI on the service worker: storage.onChanged also triggers
+  await api.storage.sync.set(patch);
+  // Don't block the UI on the background script: storage.onChanged also triggers
   // a rule sync, so this is just a nudge to apply changes right away.
   // Once it is done, re-check that the rules really landed.
   syncNow().then(checkRuleStatus, checkRuleStatus);
@@ -197,7 +202,7 @@ function saveFocus(partial) {
 }
 
 async function writeFocus(partial) {
-  const stored = await chrome.storage.sync.get({ focus: DEFAULT_SETTINGS.focus });
+  const stored = await api.storage.sync.get({ focus: DEFAULT_SETTINGS.focus });
   const latest = { ...DEFAULT_SETTINGS.focus, ...(stored.focus || {}) };
   const next = typeof partial === "function" ? partial(latest) : { ...latest, ...partial };
   settings = { ...settings, focus: next };
@@ -205,12 +210,12 @@ async function writeFocus(partial) {
   await save({ focus: next });
 }
 
-// Ask the service worker to rebuild blocking rules immediately.
+// Ask the background script to rebuild blocking rules immediately.
 async function syncNow() {
   try {
-    await chrome.runtime.sendMessage({ type: "syncNow" });
+    await api.runtime.sendMessage({ type: "syncNow" });
   } catch {
-    // Service worker not reachable; it will sync from storage.onChanged.
+    // The background script is not reachable; it will sync from storage.onChanged.
   }
 }
 
@@ -220,12 +225,12 @@ async function syncNow() {
 async function checkRuleStatus() {
   let status = null;
   try {
-    status = await chrome.runtime.sendMessage({ type: "getRuleStatus" });
+    status = await api.runtime.sendMessage({ type: "getRuleStatus" });
   } catch {
-    // The service worker is not reachable right now. Say so instead of
+    // The background script is not reachable right now. Say so instead of
     // pretending everything is fine.
     els.ruleWarning.textContent =
-      "Blocking isn't running: the extension's background service is not responding. Reload the extension from the browser's extension page.";
+      "Blocking isn't running: the extension's background script is not responding. Reload the extension from the browser's extension page.";
     els.ruleWarning.hidden = false;
     return;
   }
@@ -339,7 +344,7 @@ function renderCurrentSite() {
       // Wait for the rule to be gone before reloading, or the reload is
       // caught by the very rule we just removed.
       await syncNow();
-      chrome.tabs.reload(currentTab.id);
+      api.tabs.reload(currentTab.id);
     };
   } else if (timedBy) {
     const expiry = settings.timedBlocks[timedBy];
@@ -353,7 +358,7 @@ function renderCurrentSite() {
       render();
       await save({ timedBlocks: next });
       await syncNow();
-      chrome.tabs.reload(currentTab.id);
+      api.tabs.reload(currentTab.id);
     };
   } else {
     els.currentState.textContent = "Not blocked";
@@ -492,7 +497,7 @@ async function addSite(site, { reloadCurrentTab = false, minutes = 0 } = {}) {
   if (reloadCurrentTab && currentTab) {
     // Apply the new rule first, otherwise the reload slips through unblocked.
     await syncNow();
-    chrome.tabs.reload(currentTab.id);
+    api.tabs.reload(currentTab.id);
   }
 }
 
@@ -646,11 +651,26 @@ els.focusStopBtn.addEventListener("click", async () => {
   await syncNow();
 });
 
+// Firefox does not grant site access at install time, so the popup links to a
+// full page where the user can grant it. A popup would close as soon as the
+// browser shows the permission prompt, which cancels the request.
+els.grantAccess.addEventListener("click", async () => {
+  try {
+    await api.tabs.create({ url: api.runtime.getURL("grant.html") });
+    window.close();
+  } catch (error) {
+    els.accessWarning.hidden = true;
+    els.ruleWarning.textContent =
+      "Could not open the access page: " + (error && error.message ? error.message : error);
+    els.ruleWarning.hidden = false;
+  }
+});
+
 // ---------- init ----------
 
 (async function init() {
   const revisionAtStart = localRevision;
-  const stored = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+  const stored = await api.storage.sync.get(DEFAULT_SETTINGS);
   // If the user already changed something while we were reading, keep the
   // newer local state instead of clobbering it with this stale snapshot.
   if (localRevision === revisionAtStart) {
@@ -704,13 +724,13 @@ els.focusStopBtn.addEventListener("click", async () => {
   }
 
   try {
-    hasSiteAccess = await chrome.permissions.contains({ origins: ["<all_urls>"] });
+    hasSiteAccess = await api.permissions.contains({ origins: ["<all_urls>"] });
   } catch {
     hasSiteAccess = true; // cannot check; assume access is fine
   }
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     const host = tab ? siteFromTabUrl(tab.url) : null;
     currentTab = host ? { id: tab.id, host } : null;
   } catch {

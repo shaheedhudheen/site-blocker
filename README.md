@@ -1,7 +1,7 @@
 # Site Blocker
 
-A small Chromium (Manifest V3) extension that blocks websites you choose, so you
-can't open them by accident.
+A small Manifest V3 extension for Chrome, Edge and Firefox that blocks websites
+you choose, so you can't open them by accident.
 
 When you try to visit a blocked site, the page is replaced with a friendly
 "Site blocked" page. From there you can go back, or unblock the site if you
@@ -27,8 +27,8 @@ MIT licensed.
 - **Custom "blocked" page** – shows why the site is blocked, with a live
   countdown for timed blocks and focus sessions. Offers *Go back* and
   *Unblock and visit* (timed blocks also offer *Cancel timer and visit*).
-- **Synced settings** – the list is stored in `chrome.storage.sync`, so it
-  follows your browser profile.
+- **Synced settings** – the list is stored in the browser's sync storage, so
+  it follows your browser profile.
 - **No page access** – blocking uses the browser's native
   `declarativeNetRequest` engine. The extension never reads or modifies page
   content.
@@ -36,18 +36,22 @@ MIT licensed.
 ## Project layout
 
 ```
-extension/   the unpacked extension (load this folder)
-tests/       development test harness (not part of the extension)
-store/       Chrome Web Store listing, privacy policy and screenshots
-build.mjs    packages extension/ into a store-ready zip
-dist/        build output (not tracked by git)
+extension/       the unpacked extension (load this folder in Chromium browsers)
+tests/           development test harness (not part of the extension)
+store/           store listings, privacy policy and screenshots
+build.mjs        packages extension/ into store-ready zips
+dist/            build output (not tracked by git)
 README.md
 ```
 
-Load `extension/` in the browser; `tests/` stays outside the packaged
-extension.
+Load `extension/` in a Chromium browser, or `dist/firefox-unpacked/` in
+Firefox; `tests/` stays outside the packaged extension. There is only one
+copy of the source: the Firefox manifest is generated from
+`extension/manifest.json` at build time.
 
 ## Install (from source)
+
+### Chrome, Edge, Brave, Opera
 
 1. Open the extensions page of your browser:
    - Chrome: `chrome://extensions`
@@ -60,29 +64,80 @@ extension.
 4. Pin the extension from the puzzle-piece menu so you can see it in the
    toolbar.
 
+### Firefox
+
+Firefox cannot load `extension/` directly, because its manifest describes a
+Chrome service worker. Build the Firefox version first and load that:
+
+```
+node build.mjs firefox
+```
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…**.
+3. Select `dist/firefox-unpacked/manifest.json`.
+
+A temporary add-on lasts until Firefox is closed; that is the normal way to
+try an unpacked extension. Firefox asks for site access separately (see
+below).
+
+## Site access on Firefox
+
+Chrome grants host access at install time. Firefox does not: an extension
+declared with `<all_urls>` starts without access, and the user has to allow it
+on the **Permissions** tab of `about:addons`.
+
+The popup detects this and shows a warning with a **Grant access** button that
+opens the extension's own `grant.html` page. The page explains why access is
+needed, then calls `permissions.request()` from the button click - a request
+the browser will only show in response to a real user gesture. A popup cannot
+do this itself, because Firefox closes the popup as soon as the permission
+prompt appears, which cancels the request.
+
+Until access is granted, blocking cannot work: `declarativeNetRequest` refuses
+to install a redirect rule for a host the extension may not access. The popup
+also reports that case through its rule-health warning.
+
 ## Build
 
 ```
-node build.mjs
+node build.mjs            # Chrome Web Store zip
+node build.mjs firefox    # addons.mozilla.org (AMO) zip
 ```
 
-Packages `extension/` into `dist/site-blocker-<version>.zip` with
-`manifest.json` at the root, which is what the Chrome Web Store expects. The
-zip is written by hand so the project needs no dependencies at all; a
-`sha256` file is written next to it. Rebuild whenever you change the
+The first form packages `extension/` into `dist/site-blocker-<version>.zip`
+with `manifest.json` at the root, which is what the Chrome Web Store expects.
+The second form writes `dist/site-blocker-firefox-<version>.zip` and also
+unpacks it into `dist/firefox-unpacked/` for testing from `about:debugging`.
+
+The Firefox manifest is produced from the Chrome one, so there is no second
+copy of the source to keep in step. The differences are:
+
+- `background.service_worker` becomes `background.scripts` (Firefox does not
+  run extension service workers)
+- `minimum_chrome_version`, which Firefox does not understand, is dropped
+- `use_dynamic_url` is dropped from `web_accessible_resources`
+- `browser_specific_settings.gecko` is added: the add-on ID, the minimum
+  Firefox version, and the data-collection declaration AMO requires
+
+The zips are written by hand so the project needs no dependencies at all; a
+`sha256` file is written next to each one. Rebuild whenever you change the
 version in `extension/manifest.json`.
 
-The archive is reproducible: the same sources always produce the same bytes
+The archives are reproducible: the same sources always produce the same bytes
 and the same hash, so the published checksum keeps matching. Set
 `SOURCE_DATE_EPOCH` to stamp the archive with a date of your choosing.
 
-## Store listing
+## Store listings
 
 `store/` holds everything needed to publish the extension:
 
 - `store/listing.md` – the name, descriptions, category, permission
-  justifications and screenshot notes for the Web Store dashboard.
-- `store/privacy.md` – the privacy policy, which the store needs at a
+  justifications and screenshot notes for the Chrome Web Store dashboard.
+- `store/amo-listing.md` – the same for addons.mozilla.org: summary,
+  description, category, permission and data-collection answers, and the
+  submission checklist.
+- `store/privacy.md` – the privacy policy, which both stores need at a
   publicly reachable URL.
 - `store/screenshots.mjs` – regenerates the screenshots from the real
   extension (`node store/screenshots.mjs`).
@@ -146,9 +201,11 @@ the site you are currently on.
 
 ## How it works
 
-- `background.js` (service worker) keeps a set of dynamic
-  `declarativeNetRequest` rules in sync with the blocked list. Each rule
-  redirects top-level navigations to `blocked.html`.
+- `background.js` keeps a set of dynamic `declarativeNetRequest` rules in sync
+  with the blocked list. Each rule redirects top-level navigations to
+  `blocked.html`. It runs as a service worker in Chrome and as an event page
+  in Firefox; the code is the same because every script picks the promise
+  based API namespace with `const api = globalThis.browser ?? globalThis.chrome`.
 - Each blocked site gets one rule with a small regex: it matches the domain
   and all of its subdomains, but not look-alike domains like
   `example.com.evil.com`. The redirect passes the original URL along, so the
@@ -156,15 +213,18 @@ the site you are currently on.
 - Three kinds of block are supported: permanent (`blockedSites`), timed
   (`timedBlocks`, each with an expiry timestamp) and focus sessions
   (`focus`, blocked only during the work phase).
-- Timers are driven by `chrome.alarms`, so they keep working after the
-  service worker is shut down and after the browser restarts.
+- Timers are driven by `alarms`, so they keep working after the background
+  script is shut down and after the browser restarts.
 - Redirect rules need host access, which is why the extension asks for access
   to all sites. If that access is revoked in the browser's extension settings,
   blocking silently stops working - the popup shows a warning in that case.
+  Firefox never grants host access at install time, so there the popup's
+  warning includes a **Grant access** button (see
+  [Site access on Firefox](#site-access-on-firefox)).
 - The popup also checks that the rules really are installed, and warns if the
   browser refused them or they went missing. Opening the popup rebuilds them.
   This is what to check first if a site is not being blocked.
-- `popup.html` / `popup.js` manage the list in `chrome.storage.sync`.
+- `popup.html` / `popup.js` manage the list in `storage.sync`.
 - `blocked.html` reads the blocked site from the redirect URL and offers to
   unblock it.
 
@@ -181,12 +241,13 @@ redirect target. For example `twitter.com` redirects to `x.com`: blocking
 The `tests` folder contains the test harness used while building the
 extension. It is not part of the extension itself and can be deleted.
 (Chrome reserves top-level names starting with `_`, so this folder must not
-be named `_test`.) It has
-no dependencies beyond Node.js and a Chromium browser.
+be named `_test`.) It has no dependencies beyond Node.js and a browser.
 
-Note: branded Google Chrome (137+) ignores `--load-extension` for anti-malware
-reasons, so the automated tests prefer Microsoft Edge. Override the browser
-with the `TEST_BROWSER` environment variable if needed.
+The Chromium tests start a headless browser and load the extension through
+the DevTools `Extensions` domain, because branded Chrome and Edge (137+) no
+longer honour `--load-extension`. Older browsers fall back to the
+command-line switch automatically. `TEST_BROWSER` overrides which browser is
+used (Edge is the default on Windows).
 
 - `node tests/run.mjs` - runs a probe extension that measures which
   `declarativeNetRequest` redirect techniques work in your browser build
@@ -201,16 +262,35 @@ with the `TEST_BROWSER` environment variable if needed.
   a session with a fixed number of rounds ending on its own, stopping a
   session, the global switch, timed blocks vs focus sites, and the popup's
   warning when the blocking rules go missing.
+- `node tests/firefox.mjs` - the same end-to-end flow against real Firefox,
+  using geckodriver. Firefox has no CDP, so this drives the browser over
+  WebDriver instead.
 - `node store/screenshots.mjs` - regenerates the store screenshots from
   the real extension.
+
+The Firefox test needs two paths, and skips with a message when they are
+missing:
+
+```
+set TEST_FIREFOX=C:\path\to\firefox.exe
+set TEST_GECKODRIVER=C:\path\to\geckodriver.exe
+node tests/firefox.mjs
+```
+
+`geckodriver` is a single executable from the
+[geckodriver releases](https://github.com/mozilla/geckodriver/releases); it is
+started with `--allow-system-access`, without which WebDriver refuses to
+navigate to `moz-extension://` pages. The test builds the Firefox package
+first, installs it temporarily, and then drives the popup, the blocked page
+and the permission page like a user would.
 
 ## Privacy
 
 The extension collects nothing. It has no servers, no accounts and no
 analytics, and it never reads the content of the pages you visit - blocking
 is done by the browser's own network engine. Everything it remembers is
-stored in `chrome.storage.sync`, which the browser may synchronize between
-your own devices.
+stored in the browser's sync storage, which the browser may synchronize
+between your own devices.
 
 The full policy is in [`store/privacy.md`](store/privacy.md), published at
 <https://shaheedhudheen.github.io/site-blocker/store/privacy.md>.

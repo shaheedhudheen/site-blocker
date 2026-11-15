@@ -2,7 +2,8 @@
 
 Copy the blocks below into the [Chrome Web Store developer
 dashboard](https://chrome.google.com/webstore/devconsole) when submitting
-the extension.
+the extension. The Firefox counterpart is in
+[amo-listing.md](amo-listing.md).
 
 ## Basic listing
 

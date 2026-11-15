@@ -7,7 +7,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { cdpConnect, httpJson, waitFor, sleep } from "./cdp.mjs";
+import { cdpConnect, httpJson, waitFor, sleep, loadExtension } from "./cdp.mjs";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const EXT_DIR = path.resolve(TEST_DIR, "..", "extension");
@@ -49,6 +49,7 @@ const child = spawn(
     "--user-data-dir=" + profile,
     "--disable-extensions-except=" + EXT_DIR,
     "--load-extension=" + EXT_DIR,
+    "--enable-unsafe-extension-debugging",
     "--remote-debugging-port=" + PORT,
     "--no-first-run",
     "--no-default-browser-check",
@@ -120,11 +121,7 @@ try {
   console.log("Version:", version.Browser);
   client = await cdpConnect(version.webSocketDebuggerUrl);
 
-  const sw = await waitFor(async () => {
-    const { targetInfos } = await client.send("Target.getTargets");
-    return targetInfos.find((t) => t.type === "service_worker" && t.url.endsWith("/background.js"));
-  }, 30000);
-  extId = new URL(sw.url).host;
+  extId = await loadExtension(client, EXT_DIR);
   console.log("Extension ID:", extId);
 
   const popup = await openPage(`chrome-extension://${extId}/popup.html`);

@@ -1,12 +1,21 @@
-// Build the extension into a zip that can be uploaded to the Chrome Web Store.
+// Build the extension into zips that can be uploaded to the Chrome Web Store
+// and to addons.mozilla.org (AMO).
 //
-//   node build.mjs            -> dist/site-blocker-<version>.zip
+//   node build.mjs            -> dist/site-blocker-<version>.zip          (Chrome)
+//   node build.mjs firefox    -> dist/site-blocker-firefox-<version>.zip  (Firefox)
 //
-// The zip contains the contents of extension/ at its root (manifest.json at
-// the top level), which is what the store expects. No dependencies: the zip
-// is written by hand, so the project stays free of node_modules.
+// The Firefox build also writes dist/firefox-unpacked/, which can be loaded
+// temporarily from about:debugging for testing.
+//
+// The zips contain the contents of extension/ at their root (manifest.json at
+// the top level), which is what the stores expect. There is one source tree:
+// the Firefox manifest is derived from the Chrome one at build time, because
+// the only differences are a handful of manifest keys.
+//
+// No dependencies: the zip is written by hand, so the project stays free of
+// node_modules.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
@@ -14,6 +23,14 @@ import { deflateRawSync } from "node:zlib";
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const EXT_DIR = path.join(ROOT, "extension");
 const DIST_DIR = path.join(ROOT, "dist");
+
+// The add-on ID is what AMO signs the add-on under. It has to stay the same
+// across releases, or AMO treats every upload as a different add-on.
+const FIREFOX_ADDON_ID = "site-blocker@shaheedhudheen.github.io";
+// Firefox 142 is where both desktop and Android understand data_collection_permissions,
+// which AMO requires for new add-ons. The blocking APIs need 113+, so this is
+// comfortably above them.
+const FIREFOX_MIN_VERSION = "142.0";
 
 // ---------- a very small zip writer ----------
 
@@ -63,7 +80,9 @@ function collect(dir, base = dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) collect(full, base, out);
-    else if (entry.isFile()) out.push({ name: path.relative(base, full).split(path.sep).join("/"), full });
+    else if (entry.isFile()) {
+      out.push({ name: path.relative(base, full).split(path.sep).join("/"), content: readFileSync(full) });
+    }
   }
   return out;
 }
@@ -74,7 +93,7 @@ function buildZip(files) {
   let offset = 0;
 
   for (const file of files) {
-    const raw = readFileSync(file.full);
+    const raw = file.content;
     const deflated = deflateRawSync(raw, { level: 9 });
     // Storing is smaller for tiny files, and always valid.
     const useStore = deflated.length >= raw.length;
@@ -137,35 +156,108 @@ function buildZip(files) {
   return Buffer.concat([localBlock, centralBlock, end]);
 }
 
+// ---------- per-browser manifests ----------
+
+// Firefox supports the same Manifest V3 APIs, with three differences:
+//   - no service workers: the background script runs as an event page
+//   - it does not use Chrome's minimum_chrome_version
+//   - use_dynamic_url in web_accessible_resources is Chrome-only
+// Host permissions are declared the same way, but Firefox asks the user to
+// grant them at runtime instead of granting them at install time.
+function firefoxManifest(chromeManifest) {
+  const manifest = { ...chromeManifest };
+  delete manifest.minimum_chrome_version;
+
+  manifest.background = { scripts: ["background.js"] };
+  manifest.browser_specific_settings = {
+    gecko: {
+      id: FIREFOX_ADDON_ID,
+      strict_min_version: FIREFOX_MIN_VERSION,
+      // Firefox 140+ requires new add-ons to declare what data they collect.
+      // This extension has no network access of its own and stores everything
+      // locally, so the answer is "none".
+      data_collection_permissions: {
+        required: ["none"],
+      },
+    },
+  };
+  manifest.web_accessible_resources = (chromeManifest.web_accessible_resources || []).map((entry) => {
+    const copy = { ...entry };
+    delete copy.use_dynamic_url;
+    return copy;
+  });
+  return manifest;
+}
+
+function withManifest(files, manifest) {
+  const json = JSON.stringify(manifest, null, 2) + "\n";
+  return files.map((file) =>
+    file.name === "manifest.json" ? { name: file.name, content: Buffer.from(json, "utf8") } : file
+  );
+}
+
+// manifest.json has to be the first entry for some tools to recognise the zip.
+function orderFiles(files) {
+  return files.sort((a, b) =>
+    a.name === "manifest.json" ? -1 : b.name === "manifest.json" ? 1 : 0
+  );
+}
+
+function writeUnpacked(dir, files) {
+  rmSync(dir, { recursive: true, force: true });
+  for (const file of files) {
+    const target = path.join(dir, ...file.name.split("/"));
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, file.content);
+  }
+}
+
+function writeZip(zipName, files) {
+  const zipPath = path.join(DIST_DIR, zipName);
+  const zip = buildZip(files);
+  writeFileSync(zipPath, zip);
+
+  const sha = createHash("sha256").update(zip).digest("hex");
+  writeFileSync(path.join(DIST_DIR, `${zipName}.sha256`), `${sha}  ${zipName}\n`);
+
+  console.log(`Built ${path.relative(ROOT, zipPath)}`);
+  console.log(`  ${files.length} files, ${(zip.length / 1024).toFixed(1)} KB`);
+  console.log(`  sha256 ${sha}`);
+  for (const file of files) console.log(`    ${file.name}`);
+  return zipPath;
+}
+
 // ---------- build ----------
+
+const target = (process.argv[2] || "chrome").toLowerCase();
+if (target !== "chrome" && target !== "firefox") {
+  console.error(`Unknown target "${target}". Use "chrome" (default) or "firefox".`);
+  process.exit(1);
+}
 
 if (!existsSync(EXT_DIR)) {
   console.error("extension/ not found - run this from the project root");
   process.exit(1);
 }
 
-const manifest = JSON.parse(readFileSync(path.join(EXT_DIR, "manifest.json"), "utf8"));
-const version = manifest.version || "0.0.0";
-const files = collect(EXT_DIR);
+const chromeManifest = JSON.parse(readFileSync(path.join(EXT_DIR, "manifest.json"), "utf8"));
+const version = chromeManifest.version || "0.0.0";
+const baseFiles = collect(EXT_DIR);
 
-// manifest.json has to be the first entry for some tools to recognise the zip.
-files.sort((a, b) => (a.name === "manifest.json" ? -1 : b.name === "manifest.json" ? 1 : 0));
-
-if (!files.some((f) => f.name === "manifest.json")) {
+if (!baseFiles.some((f) => f.name === "manifest.json")) {
   console.error("extension/manifest.json is missing");
   process.exit(1);
 }
 
 mkdirSync(DIST_DIR, { recursive: true });
-const zipName = `site-blocker-${version}.zip`;
-const zipPath = path.join(DIST_DIR, zipName);
-const zip = buildZip(files);
-writeFileSync(zipPath, zip);
 
-const sha = createHash("sha256").update(zip).digest("hex");
-writeFileSync(path.join(DIST_DIR, `${zipName}.sha256`), `${sha}  ${zipName}\n`);
-
-console.log(`Built ${path.relative(ROOT, zipPath)}`);
-console.log(`  ${files.length} files, ${(zip.length / 1024).toFixed(1)} KB`);
-console.log(`  sha256 ${sha}`);
-for (const file of files) console.log(`    ${file.name}`);
+if (target === "firefox") {
+  const files = orderFiles(withManifest(baseFiles, firefoxManifest(chromeManifest)));
+  writeZip(`site-blocker-firefox-${version}.zip`, files);
+  const unpacked = path.join(DIST_DIR, "firefox-unpacked");
+  writeUnpacked(unpacked, files);
+  console.log(`  unpacked: ${path.relative(ROOT, unpacked)} (load temporarily from about:debugging)`);
+} else {
+  const files = orderFiles(baseFiles);
+  writeZip(`site-blocker-${version}.zip`, files);
+}

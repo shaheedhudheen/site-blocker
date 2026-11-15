@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Grant site access · Site Blocker</title>
+    <link rel="stylesheet" href="blocked.css" />
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon" aria-hidden="true">
+        <svg width="72" height="72" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 2.6 4.5 5.8v5.6c0 4.6 3.2 8.6 7.5 9.9 4.3-1.3 7.5-5.3 7.5-9.9V5.8L12 2.6Z"
+            stroke="#e5484d"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M8.8 11.8l2.2 2.2 4.2-4.4"
+            stroke="#e5484d"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+      <h1 id="title">Site Blocker needs site access</h1>
+      <p class="hint" id="hint">
+        Blocking works by intercepting navigations, and the browser only lets an
+        extension do that for sites it has access to. The extension never reads
+        the pages you visit.
+      </p>
+      <div class="actions">
+        <button id="grant" class="btn danger" type="button">Grant access to all sites</button>
+        <button id="close" class="btn" type="button">Not now</button>
+      </div>
+      <p class="hint ok" id="message" hidden></p>
+    </div>
+    <script src="grant.js"></script>
+  </body>
+</html>

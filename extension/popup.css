@@ -198,6 +198,32 @@ main {
   margin: 8px 0 0;
 }
 
+/* The "no site access" warning carries a button, so lay it out as a row. */
+.warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.warning[hidden] {
+  display: none;
+}
+.link-btn {
+  flex: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.link-btn:hover {
+  color: var(--accent-strong);
+}
+
 /* site list */
 .site-list {
   list-style: none;
