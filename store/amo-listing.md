@@ -24,6 +24,10 @@ AMO has no "Productivity" category, so the listing uses **Other**. The
 description and the categories are the only place the storefront can express
 what the add-on is for; the add-on's own summary carries the keywords.
 
+The URL slug `site-blocker` is the preferred one. If AMO reports that it is
+already taken, use `site-blocker-block-distracting-sites` instead; the slug
+cannot be changed after the first submission.
+
 **Summary** (max 250 characters, 85 used):
 
 > Block distracting websites. Set timed blocks or run a focus timer to stay on task.
