@@ -130,13 +130,17 @@ and the same hash, so the published checksum keeps matching. Set
 
 ## Store listings
 
+The Firefox version is on addons.mozilla.org at
+<https://addons.mozilla.org/firefox/addon/block-distracting-sites/> (version
+1.0.0, awaiting review).
+
 `store/` holds everything needed to publish the extension:
 
 - `store/listing.md` – the name, descriptions, category, permission
   justifications and screenshot notes for the Chrome Web Store dashboard.
 - `store/amo-listing.md` – the same for addons.mozilla.org: summary,
-  description, category, permission and data-collection answers, and the
-  submission checklist.
+  description, category, permission and data-collection answers, the values
+  used for the first submission, and the submission checklist.
 - `store/privacy.md` – the privacy policy, which both stores need at a
   publicly reachable URL.
 - `store/screenshots.mjs` – regenerates the screenshots from the real

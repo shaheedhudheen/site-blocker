@@ -1,16 +1,18 @@
 # Firefox Add-ons (AMO) listing
 
-Copy the blocks below into the [AMO developer
-hub](https://addons.mozilla.org/developers/addons) when submitting the
-extension. The package to upload is `dist/site-blocker-firefox-<version>.zip`,
-built with `node build.mjs firefox`.
+The listed add-on lives at
+<https://addons.mozilla.org/firefox/addon/block-distracting-sites/>. This file
+records the values that are entered in the [AMO developer
+hub](https://addons.mozilla.org/developers/addons), so a later release can be
+submitted with the same details. The package to upload is
+`dist/site-blocker-firefox-<version>.zip`, built with `node build.mjs firefox`.
 
 ## Basic listing
 
 | Field | Value |
 |---|---|
 | Name | Site Blocker - Block Distracting Sites |
-| Add-on URL | `site-blocker` → <https://addons.mozilla.org/firefox/addon/site-blocker/> |
+| Add-on URL | `block-distracting-sites` → <https://addons.mozilla.org/firefox/addon/block-distracting-sites/> |
 | Version | 1.0.0 |
 | Category | Other |
 | Second category | (none) |
@@ -24,11 +26,12 @@ AMO has no "Productivity" category, so the listing uses **Other**. The
 description and the categories are the only place the storefront can express
 what the add-on is for; the add-on's own summary carries the keywords.
 
-The URL slug `site-blocker` is the preferred one. If AMO reports that it is
-already taken, use `site-blocker-block-distracting-sites` instead; the slug
-cannot be changed after the first submission.
+The URL slug is `block-distracting-sites`. The form suggests a slug from the
+name, but `site-blocker` already belongs to another add-on, and AMO's next free
+variant was `site-blocker4`; the slug was changed to `block-distracting-sites`
+before the first submission. The slug cannot be changed afterwards.
 
-**Summary** (max 250 characters, 85 used):
+**Summary** (max 250 characters, 82 used):
 
 > Block distracting websites. Set timed blocks or run a focus timer to stay on task.
 
@@ -136,8 +139,15 @@ AMO allows any number of screenshots and recommends 1280x800; the blocked page
 capture already matches that, and the popup capture is a 2x image that scales
 down cleanly.
 
+Both are uploaded to the listing, in this order, with these captions:
+
+1. `blocked.png` - "The blocked page names the site and lets you go back or
+   unblock it."
+2. `popup.png` - "Add sites, set timed blocks, and run focus sessions from the
+   toolbar popup."
+
 The listing icon is `extension/icons/icon128.png` (128x128, already in the
-manifest).
+manifest); it was uploaded as the custom icon as well.
 
 ## Submitting
 
@@ -148,15 +158,37 @@ hub](https://addons.mozilla.org/developers/addons):
    `npx web-ext lint --source-dir dist/firefox-unpacked` (it reports 0
    errors and 0 warnings for this add-on).
 2. Click **Submit a New Add-on**, choose **On this site** (listed), and
-   upload `dist/site-blocker-firefox-<version>.zip`.
+   upload `dist/site-blocker-firefox-<version>.zip`. AMO validates the package
+   immediately.
 3. Select **Firefox** as the platform. Do not select Firefox for Android:
    the popup is laid out for a desktop window and has not been tested there.
 4. Answer **No** to the source-code question - the package is the source.
 5. Fill in the fields above. Paste the description into the description
-   box; AMO renders the Markdown.
-6. Tick **This add-on has a privacy policy** and enter the URL.
+   box; AMO renders the Markdown. AMO's category list has no "Other" entry;
+   tick **My add-on doesn't fit into any of the categories**.
+6. Tick **This add-on has a Privacy Policy** and enter the URL.
 7. Submit and wait for review. New add-ons usually get a human review before
    they are listed.
+8. Afterwards, add the screenshots and the icon from the **Images** section of
+   the add-on's **Edit Product Page**. The page keeps the upload field behind
+   an "Edit" toggle, and screenshots save without an image if you submit before
+   the upload has finished - fill in the caption only once the preview shows the
+   image.
+
+### The first submission
+
+Version 1.0.0 was submitted on 16 November 2026 and is in **Awaiting Review**:
+
+- the validator reported no errors and no warnings
+- platform: Firefox only; source code: no
+- category: Other (the "doesn't fit into any of the categories" checkbox)
+- license: MIT; privacy policy: the URL above
+- one icon and two screenshots, with the captions above
+- support website filled in; support email left empty
+
+AMO names the signed package after the add-on's original slug, so the download
+file is `site_blocker4-1.0.0.zip` even though the listing URL is
+`block-distracting-sites`.
 
 ### Submitting from the command line
 
